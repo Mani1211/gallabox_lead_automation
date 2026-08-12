@@ -1,0 +1,13 @@
+{
+  "name": "gallabox-webhook",
+  "version": "1.0.0",
+  "description": "Appwrite Function: receives Gallabox chatbot webhook, fetches the contact's name & number from the Gallabox API, and creates a Gallabox lead document.",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "node-appwrite": "^14.0.0"
+  }
+}
