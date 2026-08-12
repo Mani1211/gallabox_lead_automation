@@ -35,7 +35,33 @@ automatically by Appwrite — do not set them.
 If you rely on the injected dynamic key instead of `APPWRITE_API_KEY`, enable a
 scope for `databases.write` on the function.
 
-## 2. Deploy
+## 2. Test locally (before deploying)
+
+Run the function on your machine with a mock Appwrite context. It executes the
+real Gallabox contact fetch and the real Appwrite write, so a green run here
+means the deployed function will behave identically.
+
+```bash
+cp .env.example .env      # then fill in the values
+npm install
+npm run test:local                    # uses the built-in sample payload
+npm run test:local -- <realContactId> # or pass a real contactId to fetch
+```
+
+Requires Node 18+. For local runs, set `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`
+and `APPWRITE_API_KEY` (a server key with `documents.write`) in `.env` — Appwrite
+injects the first two automatically once deployed, but locally there's no runtime
+to inject them.
+
+- ✅ Success prints `HTTP status: 200` and `{"success":true,"id":...}` and a new
+  doc appears in `gallabox_leads`.
+- ❌ Failure prints the failing step + message (same as the deployed function's
+  logs) and exits non-zero.
+
+Once it's green locally, commit and push — if the function is Git-connected in
+Appwrite, the push auto-deploys; otherwise redeploy from the console/CLI.
+
+## 3. Deploy
 
 - Runtime: **Node.js 18+**
 - Entrypoint: `src/main.js`
@@ -52,12 +78,12 @@ appwrite functions createDeployment \
   --activate true
 ```
 
-## 3. Point Gallabox at it
+## 4. Point Gallabox at it
 
 Copy the Function's **Domain / execution URL** from the Appwrite console and set
 it as the webhook URL in your Gallabox bot's "post to webhook" step.
 
-## 4. Test
+## 5. Test the deployed function
 
 The webhook is a plain POST — test it with `curl` against the function's public
 domain (replace the URL and the payload with a real Gallabox sample):

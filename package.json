@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/main.js",
   "scripts": {
-    "start": "node src/main.js"
+    "start": "node src/main.js",
+    "test:local": "node test/local.js"
   },
   "dependencies": {
     "node-appwrite": "^14.0.0"
