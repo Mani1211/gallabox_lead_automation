@@ -87,7 +87,6 @@ export default async ({ req, res, log, error }) => {
     // Whole extracted map stored as a JSON string; the Leads UI parses it and
     // iterates over whatever keys are present (they vary per flow).
     extractedData: safeStringify(extracted.extractedData),
-    source: "gallabox",
   };
 
   try {
@@ -216,7 +215,7 @@ function pickEmail(contact) {
 
 function pickChannel(contact) {
   if (!contact) return "";
-  const c = contact.channel || contact.source || contact.lastChannel || contact?.contact?.channel || "";
+  const c = contact.channel || contact.lastChannel || contact?.contact?.channel || "";
   return typeof c === "string" ? c.toLowerCase() : "";
 }
 
