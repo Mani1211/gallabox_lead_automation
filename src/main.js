@@ -59,7 +59,7 @@ export default async ({ req, res, log, error }) => {
   }
 
   const name = pickName(contact) || extracted.name || "";
-  const mobileNumber = pickPhone(contact) || extracted.mobileNumber || "";
+  const mobileNumber = normalizePhone(pickPhone(contact) || extracted.mobileNumber || "");
   const email = pickEmail(contact) || extracted.email || "";
   log(`Resolved contact: name="${name}" mobile="${mobileNumber}"`);
 
@@ -199,6 +199,16 @@ function pickPhone(contact) {
     return typeof first === "string" ? first : first.phoneNumber || first.value || first.number || "";
   }
   return typeof p === "string" ? p : p.phoneNumber || p.value || "";
+}
+
+// Store just the local number, without the country/dialing code. The code can
+// be any length (e.g. "91", "1", "971"), so we drop every non-digit character
+// and keep the last 10 digits (the local number). "+91 98765 43210" -> "9876543210".
+function normalizePhone(raw) {
+  if (!raw) return "";
+  const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
 function pickEmail(contact) {
