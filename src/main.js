@@ -201,13 +201,51 @@ function pickPhone(contact) {
   return typeof p === "string" ? p : p.phoneNumber || p.value || "";
 }
 
-// Store just the local number, without the country/dialing code. The code can
-// be any length (e.g. "91", "1", "971"), so we drop every non-digit character
-// and keep the last 10 digits (the local number). "+91 98765 43210" -> "9876543210".
+// Country calling codes we recognise, so we strip the exact dialing code and
+// keep the correct local number for any country (not just a blind 10-digit
+// chop). Longest codes are matched first (e.g. "971" before "91"/"9").
+const COUNTRY_CODES = [
+  "1", // US / Canada
+  "7", // Russia / Kazakhstan
+  "20", "27", "30", "31", "32", "33", "34", "36", "39", "40", "41", "43", "44", "45", "46", "47", "48", "49",
+  "51", "52", "53", "54", "55", "56", "57", "58",
+  "60", "61", "62", "63", "64", "65", "66",
+  "81", "82", "84", "86",
+  "90", "91", "92", "93", "94", "95", "98",
+  "211", "212", "213", "216", "218",
+  "230", "248", "249",
+  "351", "352", "353", "354", "355", "356", "357", "358", "359",
+  "852", "853", "855", "856",
+  "880", "886",
+  "960", "961", "962", "963", "964", "965", "966", "967", "968", "970", "971", "972", "973", "974", "975", "976", "977",
+  "992", "993", "994", "995", "996", "998",
+];
+
+// Store just the local number, without the country/dialing code. Strips all
+// formatting, removes an international prefix ("+" / "00"), then removes a
+// recognised country code. Falls back to keeping the last 10 digits.
+// "+91 98765 43210" -> "9876543210"; "+971 50 123 4567" -> "501234567".
 function normalizePhone(raw) {
   if (!raw) return "";
-  const digits = String(raw).replace(/\D/g, "");
+  const hadIntlPrefix = /^\s*(\+|00)/.test(String(raw));
+  let digits = String(raw).replace(/\D/g, "");
   if (!digits) return "";
+  if (digits.startsWith("00")) digits = digits.slice(2);
+
+  // A bare number with no international prefix is already the local number.
+  if (!hadIntlPrefix && digits.length <= 10) return digits;
+
+  // Strip a recognised country code (longest first) when the remaining local
+  // number is a plausible length.
+  const sorted = [...COUNTRY_CODES].sort((a, b) => b.length - a.length);
+  for (const code of sorted) {
+    if (digits.startsWith(code)) {
+      const local = digits.slice(code.length);
+      if (local.length >= 6 && local.length <= 11) return local;
+    }
+  }
+
+  // Fallback: keep the last 10 digits.
   return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
