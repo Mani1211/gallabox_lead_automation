@@ -15,8 +15,24 @@ Gallabox chatbot (WhatsApp / Instagram)
                                         ├─► GET Gallabox API  /accounts/{accountId}/contacts/{contactId}
                                         │        → name, phone, email
                                         │
-                                        └─► Appwrite createDocument( gallabox_leads )
+                                        └─► Appwrite upsert( gallabox_leads )  [keyed by contactId]
 ```
+
+## Upsert behaviour (keyed by `contactId`)
+
+`contactId` is the unique identifier. On every webhook:
+
+- **Existing record for this `contactId`** → **update** it. Gallabox re-sends the
+  webhook once a contact's number becomes available, and the update refreshes
+  the record instead of creating a duplicate.
+- **No record + mobile number available** → **create** the lead.
+- **No record + no mobile number** → **skip** (returns HTTP 200 with
+  `action: "skipped"`). This is an Instagram contact whose number hasn't been
+  shared yet; Gallabox resends the webhook once it is, and that resend creates
+  the record.
+
+Requires the `contactId` attribute to be **indexed** on the `gallabox_leads`
+collection for the lookup query.
 
 ## 1. Environment variables (set on the Function → Settings → Variables)
 

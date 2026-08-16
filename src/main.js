@@ -1,4 +1,4 @@
-import { Client, Databases, ID } from "node-appwrite";
+import { Client, Databases, ID, Query } from "node-appwrite";
 
 /**
  * Gallabox webhook → Gallabox lead.
@@ -7,7 +7,12 @@ import { Client, Databases, ID } from "node-appwrite";
  *   1. Gallabox chatbot finishes a conversation and POSTs a webhook here.
  *   2. The webhook carries a contactId + the chat data (but NOT the name/number).
  *   3. We call the Gallabox API with that contactId to fetch name + phone.
- *   4. We create a "gallabox lead" document in Appwrite.
+ *   4. Upsert a "gallabox lead" document in Appwrite, keyed by contactId:
+ *        - existing record for this contactId  → UPDATE it (Gallabox resends
+ *          once the number becomes available), so we never duplicate.
+ *        - no record + mobile number available → CREATE it.
+ *        - no record + no mobile number        → SKIP (Instagram contact whose
+ *          number isn't shared yet); Gallabox resends when it is.
  *
  * Configure these environment variables on the Appwrite Function:
  *   GALLABOX_API_KEY               – Gallabox API key    (Settings → API key & secret)
@@ -89,15 +94,47 @@ export default async ({ req, res, log, error }) => {
     extractedData: safeStringify(extracted.extractedData),
   };
 
+  const DB = process.env.APPWRITE_DATABASE_ID;
+  const COLLECTION = process.env.GALLABOX_LEADS_COLLECTION_ID;
+
+  // ── 5. Look up an existing lead by contactId (the unique identifier) ───────
+  let existing = null;
   try {
-    const created = await databases.createDocument(
-      process.env.APPWRITE_DATABASE_ID,
-      process.env.GALLABOX_LEADS_COLLECTION_ID,
-      ID.unique(),
-      doc
-    );
+    const { documents } = await databases.listDocuments(DB, COLLECTION, [
+      Query.equal("contactId", extracted.contactId),
+      Query.limit(1),
+    ]);
+    existing = documents[0] || null;
+  } catch (e) {
+    error(`Lookup by contactId failed: ${e.message}`);
+    return res.json({ success: false, error: `Appwrite listDocuments failed: ${e.message}` }, 500);
+  }
+
+  // ── 6a. Existing record → UPDATE it (e.g. Gallabox resend once the number
+  //        becomes available). contactId dedupes so we never create a copy. ──
+  if (existing) {
+    try {
+      const updated = await databases.updateDocument(DB, COLLECTION, existing.$id, doc);
+      log(`Updated existing gallabox lead ${updated.$id} for contact ${extracted.contactId}`);
+      return res.json({ success: true, action: "updated", id: updated.$id, name, mobileNumber });
+    } catch (e) {
+      error(`Failed to update gallabox lead document: ${e.message}`);
+      return res.json({ success: false, error: `Appwrite updateDocument failed: ${e.message}` }, 500);
+    }
+  }
+
+  // ── 6b. No record yet AND no mobile number → Instagram contact whose number
+  //        isn't shared yet. Skip; Gallabox will resend once it's available. ──
+  if (!mobileNumber) {
+    log(`No existing record and no mobile number for contact ${extracted.contactId} — skipping (Instagram, awaiting number).`);
+    return res.json({ success: true, action: "skipped", reason: "no mobile number yet", contactId: extracted.contactId });
+  }
+
+  // ── 6c. No record yet AND mobile number available → CREATE ────────────────
+  try {
+    const created = await databases.createDocument(DB, COLLECTION, ID.unique(), doc);
     log(`Created gallabox lead ${created.$id} for contact ${extracted.contactId}`);
-    return res.json({ success: true, id: created.$id, name, mobileNumber });
+    return res.json({ success: true, action: "created", id: created.$id, name, mobileNumber });
   } catch (e) {
     error(`Failed to create gallabox lead document: ${e.message}`);
     return res.json({ success: false, error: `Appwrite createDocument failed: ${e.message}` }, 500);
