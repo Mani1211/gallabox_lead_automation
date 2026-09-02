@@ -17,13 +17,25 @@ import { Client, Databases, ID, Query } from "node-appwrite";
  */
 
 export default async ({ req, res, log, error }) => {
-  // ── 1. Parse body ─────────────────────────────────────────────────────────
+  // ── 1. Parse body (robust across Appwrite runtime shapes) ─────────────────
   let body = {};
-  try {
-    body = req.bodyJson ?? (typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body ?? {});
-  } catch (e) {
-    error(`Could not parse body as JSON: ${e.message}`);
-    return res.json({ success: false, error: "Invalid JSON body" }, 400);
+  if (req.bodyJson && typeof req.bodyJson === "object") {
+    body = req.bodyJson;
+  } else if (req.body && typeof req.body === "object") {
+    body = req.body;
+  } else {
+    const raw = String(req.bodyRaw ?? req.bodyText ?? (typeof req.body === "string" ? req.body : "") ?? "").trim();
+    if (!raw) {
+      // Empty body — health check / warm ping / console execute. No-op, not an error.
+      log("Empty request body — nothing to do (ping).");
+      return res.json({ success: true, skipped: "empty body" }, 200);
+    }
+    try {
+      body = JSON.parse(raw);
+    } catch (e) {
+      error(`Invalid JSON body: ${e.message}`);
+      return res.json({ success: false, error: "Invalid JSON body" }, 400);
+    }
   }
 
   // ── 2. Auth (shared secret) ───────────────────────────────────────────────
