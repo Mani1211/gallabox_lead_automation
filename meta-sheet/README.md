@@ -25,15 +25,15 @@ Gallabox function or its URL. Point this function's **root directory** to
 | `name`               | string       | from `first_name`                                  |
 | `mobileNumber`       | string       | from `phone_number` (country code stripped to local) |
 | `email`              | string       | usually empty (Meta phone-only form)               |
-| `city`               | string       | from `city`                                        |
-| `campaign`           | string       | from `Campaign Name`                               |
-| `adSet`              | string       | from `Ad Set / Audience`                           |
-| `destinationInterest`| string       | from `Destination Interest` / creative            |
 | `contactId`          | string       | **indexed** — the sheet row's `Lead ID` (dedup)    |
-| `formData`           | string       | large (~20000) — whole row JSON; UI shows filled fields |
+| `formData`           | string       | large (~20000) — **whole row as one JSON string** (campaign, ad set, city, and every what/when question); UI shows the filled fields |
 | `source`             | string       | constant `"meta"`                                  |
 | `assignedTo`         | relationship | → Employees (nullable) — assignee dropdown         |
 | `requestDetails`     | relationship | → Requests (nullable) — set on Create Request      |
+
+Only the identity fields (`name`, `mobileNumber`, `email`) are separate
+columns; everything else — campaign, ad set, city and all the questions — is
+kept inside the single `formData` JSON (like Gallabox's `extractedData`).
 
 Index `contactId`. Copy the `assignedTo` / `requestDetails` relationship
 settings from `gallabox_leads`.
@@ -69,11 +69,10 @@ overlaps or a row is edited.
 
 ## Field mapping
 
-`src/main.js` maps `first_name → name`, `phone_number → mobileNumber`,
-`city`, `Campaign Name → campaign`, `Ad Set / Audience → adSet`, and keeps the
-**entire row** in `formData` (matched case/space/punctuation-insensitively, so
-header quirks like `what_is_you_city_of_departure?` are preserved). The Leads UI
-renders whatever fields are non-empty.
+`src/main.js` maps only `first_name → name` and `phone_number → mobileNumber`
+(and `email` if present); the **entire row** — campaign, ad set, city and every
+what/when question — is kept in the single `formData` JSON. The Leads UI parses
+it and renders whatever fields are non-empty.
 
 ## Test
 

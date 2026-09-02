@@ -41,26 +41,19 @@ export default async ({ req, res, log, error }) => {
 
   log(`Meta sheet row received. rowId=${rowId} keys=${Object.keys(data).join(", ")}`);
 
-  // ── 3. Map the ad-response fields (case/space/punctuation-insensitive) ─────
+  // ── 3. Map only the identity fields; everything else stays in formData ─────
   const name = pick(data, ["first_name", "full_name", "name"]);
   const mobileNumber = normalizePhone(pick(data, ["phone_number", "phone", "mobile", "mobile_number"]));
   const email = pick(data, ["email", "email_address"]);
-  const city = pick(data, ["city"]);
-  const campaign = pick(data, ["campaign_name", "campaign"]);
-  const adSet = pick(data, ["ad_set_audience", "ad_set", "adset", "audience"]);
-  const destinationInterest = pick(data, ["destination_interest", "destination_video_or_image", "destination"]);
 
   const doc = {
     name,
     mobileNumber,
     email,
-    city,
-    campaign,
-    adSet,
-    destinationInterest,
-    contactId: rowId, // reuse a generic external id; keeps parity with other lead types
+    contactId: rowId, // the sheet row's Lead ID — dedup key
     source: "meta",
-    // Whole sheet row as JSON; the Leads UI parses it and shows the filled fields.
+    // Whole sheet row as one JSON string (campaign, ad set, city and all the
+    // what/when questions); the Leads UI parses it and shows the filled fields.
     formData: safeStringify(data),
   };
 
