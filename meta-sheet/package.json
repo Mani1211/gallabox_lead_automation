@@ -1,0 +1,13 @@
+{
+  "name": "meta-sheet-webhook",
+  "version": "1.0.0",
+  "description": "Appwrite Function: receives Meta/Instagram lead-ad rows from a Google Sheet (via Apps Script) and upserts them as Meta Ad leads.",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "node-appwrite": "^14.0.0"
+  }
+}
