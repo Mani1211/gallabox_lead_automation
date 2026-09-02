@@ -51,7 +51,9 @@ settings from `gallabox_leads`.
 
 1. Sheet → **Extensions → Apps Script**, paste `apps-script.gs`.
 2. Set `WEBHOOK_URL` (the function domain) and `SECRET` (= `META_WEBHOOK_SECRET`).
-   Set `SHEET_NAME` if the tab isn't the first one.
+   Set `SHEET_NAME` if the tab isn't the first one. Set **`HEADER_ROW`** to the
+   row that holds the real field names — this sheet uses **row 2** (row 1 is
+   section labels like "📞 FIRST CONTACT – SALES FILLS").
 3. Run **`markAllSyncedBaseline()`** once → marks existing rows so only **new**
    rows sync from now on (prevents a mass back-import).
 4. Run **`setupTrigger()`** once → installs a 5-minute time trigger.

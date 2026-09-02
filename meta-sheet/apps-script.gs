@@ -12,6 +12,7 @@
 var WEBHOOK_URL = "https://YOUR-META-FUNCTION-DOMAIN.appwrite.run/"; // the meta-sheet function URL
 var SECRET = "CHANGE_ME"; // must match META_WEBHOOK_SECRET on the function
 var SHEET_NAME = ""; // exact tab name; leave "" to use the first sheet
+var HEADER_ROW = 2; // 1-based row that holds the REAL field names (row 1 here is section labels)
 var PHONE_HEADER = "phone_number"; // header whose non-empty value marks a real lead
 var LEAD_ID_HEADER = "Lead ID";
 var SYNCED_HEADER = "Synced At";
@@ -21,22 +22,27 @@ function syncMetaLeads() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = SHEET_NAME ? ss.getSheetByName(SHEET_NAME) : ss.getSheets()[0];
   var values = sheet.getDataRange().getValues();
-  if (values.length < 2) return;
+  if (values.length <= HEADER_ROW) return;
 
-  var headers = values[0].map(function (h) { return String(h).trim(); });
+  var h = HEADER_ROW - 1; // 0-based header row index
+  var headers = values[h].map(function (x) { return String(x).trim(); });
   var leadIdCol = headers.indexOf(LEAD_ID_HEADER);
   var syncedCol = headers.indexOf(SYNCED_HEADER);
   var changed = false;
   if (leadIdCol === -1) { headers.push(LEAD_ID_HEADER); leadIdCol = headers.length - 1; changed = true; }
   if (syncedCol === -1) { headers.push(SYNCED_HEADER); syncedCol = headers.length - 1; changed = true; }
-  if (changed) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (changed) sheet.getRange(HEADER_ROW, 1, 1, headers.length).setValues([headers]);
 
   var phoneCol = headers.indexOf(PHONE_HEADER);
+  if (phoneCol === -1) {
+    Logger.log("phone_number column not found in header row " + HEADER_ROW + " — check HEADER_ROW / PHONE_HEADER.");
+    return;
+  }
 
-  for (var r = 1; r < values.length; r++) {
+  for (var r = HEADER_ROW; r < values.length; r++) { // data starts right after the header row
     var row = values[r];
     var synced = row[syncedCol];
-    var phone = phoneCol > -1 ? String(row[phoneCol] || "").trim() : "";
+    var phone = String(row[phoneCol] || "").trim();
     if (synced || !phone) continue; // skip already-synced rows and rows with no phone
 
     var data = {};
@@ -86,16 +92,39 @@ function markAllSyncedBaseline() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = SHEET_NAME ? ss.getSheetByName(SHEET_NAME) : ss.getSheets()[0];
   var values = sheet.getDataRange().getValues();
-  var headers = values[0].map(function (h) { return String(h).trim(); });
+  var h = HEADER_ROW - 1;
+  var headers = values[h].map(function (x) { return String(x).trim(); });
   var syncedCol = headers.indexOf(SYNCED_HEADER);
   if (syncedCol === -1) {
     headers.push(SYNCED_HEADER);
     syncedCol = headers.length - 1;
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(HEADER_ROW, 1, 1, headers.length).setValues([headers]);
   }
-  for (var r = 1; r < values.length; r++) {
+  for (var r = HEADER_ROW; r < values.length; r++) {
     if (!sheet.getRange(r + 1, syncedCol + 1).getValue()) {
       sheet.getRange(r + 1, syncedCol + 1).setValue("baseline");
     }
   }
+}
+
+// ── Diagnostic: run and read the Execution log ────────────────────────────
+function debugSync() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = SHEET_NAME ? ss.getSheetByName(SHEET_NAME) : ss.getSheets()[0];
+  Logger.log("Sheet used: " + (sheet ? sheet.getName() : "NULL"));
+  if (!sheet) return;
+  var values = sheet.getDataRange().getValues();
+  var h = HEADER_ROW - 1;
+  var headers = values[h].map(function (x) { return String(x).trim(); });
+  Logger.log("Header row " + HEADER_ROW + ": " + JSON.stringify(headers));
+  var phoneCol = headers.indexOf(PHONE_HEADER);
+  var syncedCol = headers.indexOf(SYNCED_HEADER);
+  Logger.log("phoneCol: " + phoneCol + "   syncedCol: " + syncedCol);
+  var unsynced = 0;
+  for (var r = HEADER_ROW; r < values.length; r++) {
+    var phone = phoneCol > -1 ? String(values[r][phoneCol] || "").trim() : "";
+    var synced = syncedCol > -1 ? values[r][syncedCol] : "";
+    if (!synced && phone) unsynced++;
+  }
+  Logger.log("Unsynced rows WITH phone: " + unsynced);
 }
