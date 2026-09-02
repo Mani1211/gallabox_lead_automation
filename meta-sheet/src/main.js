@@ -58,10 +58,12 @@ export default async ({ req, res, log, error }) => {
   };
 
   // ── 4. Upsert by rowId ────────────────────────────────────────────────────
-  const client = new Client()
-    .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT)
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(process.env.APPWRITE_API_KEY || req.headers["x-appwrite-key"] || "");
+  const endpoint =
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT || process.env.APPWRITE_ENDPOINT || "https://cloud.appwrite.io/v1";
+  const project = process.env.APPWRITE_FUNCTION_PROJECT_ID || process.env.APPWRITE_PROJECT_ID || "";
+  const apiKey = process.env.APPWRITE_API_KEY || req.headers["x-appwrite-key"] || "";
+  log(`Appwrite client → endpoint=${endpoint} project=${project ? "set" : "MISSING"} apiKey=${apiKey ? "set" : "MISSING"}`);
+  const client = new Client().setEndpoint(endpoint).setProject(project).setKey(apiKey);
   const databases = new Databases(client);
   const DB = process.env.APPWRITE_DATABASE_ID;
   const COLLECTION = process.env.META_LEADS_COLLECTION_ID;
