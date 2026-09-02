@@ -25,6 +25,7 @@ Gallabox function or its URL. Point this function's **root directory** to
 | `name`               | string       | from `first_name`                                  |
 | `mobileNumber`       | string       | from `phone_number` (country code stripped to local) |
 | `email`              | string       | usually empty (Meta phone-only form)               |
+| `branch`             | string       | **indexed** — `"Chennai"` / `"Bangalore"` … (from the sheet's `BRANCH`) |
 | `contactId`          | string       | **indexed** — the sheet row's `Lead ID` (dedup)    |
 | `formData`           | string       | large (~20000) — **whole row as one JSON string** (campaign, ad set, city, and every what/when question); UI shows the filled fields |
 | `source`             | string       | constant `"meta"`                                  |
@@ -62,6 +63,37 @@ settings from `gallabox_leads`.
 The script adds two columns it manages: **Lead ID** (stable dedup id) and
 **Synced At** (timestamp). It only posts rows that have a `phone_number` and no
 `Synced At`.
+
+## Multiple branches (Chennai + Bangalore) — one collection, one function
+
+Each branch has its **own** Meta ad sheet, but they all feed the **same**
+function and the **same** `meta_leads` collection. The only per-sheet
+difference is the `BRANCH` constant in the Apps Script — its value is stored on
+every lead so the Sales Admin "Meta Ad Leads" tab can label and filter by
+branch.
+
+- Use **the same** `WEBHOOK_URL` and `SECRET` in every branch's Apps Script.
+- Set `BRANCH` to the branch name **exactly** as it appears elsewhere in the
+  app (matches the Employee/branch names) — `"Chennai"`, `"Bangalore"`, …
+  This value flows through as `payload.branch` → the function's `branch` field
+  → the `branch` attribute on the lead.
+- A blank `BRANCH` is allowed (stored as `""`), but then that lead can't be
+  filtered by branch — always set it.
+
+**Chennai sheet** (already live): set `BRANCH = "Chennai"` and redeploy the
+script (no other change).
+
+**Bangalore sheet** (new): open its **Extensions → Apps Script**, paste the
+same `apps-script.gs`, then:
+1. Set `WEBHOOK_URL` and `SECRET` to the **same** values as Chennai.
+2. Set `BRANCH = "Bangalore"`.
+3. Set `HEADER_ROW` to the row holding the real field names (row 2 if it uses
+   the same two-row header layout).
+4. Run **`markAllSyncedBaseline()`** once (so old rows don't back-import).
+5. Run **`setupTrigger()`** once (installs the 5-minute trigger).
+
+Because dedup is `contactId = Lead ID` and each sheet mints its own UUIDs,
+there's no id collision between branches.
 
 ## Dedup / idempotency
 

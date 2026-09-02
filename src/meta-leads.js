@@ -47,11 +47,12 @@ export default async ({ req, res, log, error }) => {
   }
 
   const rowId = String(body.rowId || "").trim();
+  const branch = String(body.branch || "").trim(); // which branch's sheet this row came from
   const data = body.data && typeof body.data === "object" ? body.data : {};
   if (!rowId) return res.json({ success: false, error: "rowId is required" }, 400);
   if (Object.keys(data).length === 0) return res.json({ success: false, error: "empty row data" }, 400);
 
-  log(`Meta sheet row received. rowId=${rowId} keys=${Object.keys(data).join(", ")}`);
+  log(`Meta sheet row received. rowId=${rowId} branch=${branch || "(none)"} keys=${Object.keys(data).join(", ")}`);
 
   // ── 3. Map only the identity fields; everything else stays in formData ─────
   const name = pick(data, ["first_name", "full_name", "name"]);
@@ -62,6 +63,7 @@ export default async ({ req, res, log, error }) => {
     name,
     mobileNumber,
     email,
+    branch, // "Chennai" | "Bangalore" | ... — from the source sheet
     contactId: rowId, // the sheet row's Lead ID — dedup key
     source: "meta",
     // Whole sheet row as one JSON string (campaign, ad set, city and all the

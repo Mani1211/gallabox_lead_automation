@@ -11,6 +11,7 @@
 // ── CONFIG ────────────────────────────────────────────────────────────────
 var WEBHOOK_URL = "https://YOUR-META-FUNCTION-DOMAIN.appwrite.run/"; // the meta-sheet function URL
 var SECRET = "CHANGE_ME"; // must match META_WEBHOOK_SECRET on the function
+var BRANCH = "Chennai"; // this sheet's branch — e.g. "Chennai" or "Bangalore" (stored on each lead)
 var SHEET_NAME = ""; // exact tab name; leave "" to use the first sheet
 var HEADER_ROW = 2; // 1-based row that holds the REAL field names (row 1 here is section labels)
 var PHONE_HEADER = "phone_number"; // header whose non-empty value marks a real lead
@@ -64,7 +65,7 @@ function syncMetaLeads() {
       var resp = UrlFetchApp.fetch(WEBHOOK_URL, {
         method: "post",
         contentType: "application/json",
-        payload: JSON.stringify({ secret: SECRET, rowId: rowId, data: data }),
+        payload: JSON.stringify({ secret: SECRET, rowId: rowId, branch: BRANCH, data: data }),
         muteHttpExceptions: true,
       });
       var code = resp.getResponseCode();
