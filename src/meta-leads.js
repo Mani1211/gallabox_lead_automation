@@ -153,7 +153,6 @@ async function createBareRequest(databases, DB, REQUESTS, lead, log) {
     name: lead.name,
     phoneNumber: lead.mobileNumber,
     userId: "META", // Request From marker
-    branch: lead.branch,
     email: lead.email,
     countries: [],
     requestDate: new Date().toISOString(),
