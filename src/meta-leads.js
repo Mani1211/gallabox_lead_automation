@@ -81,8 +81,11 @@ export default async ({ req, res, log, error }) => {
   const databases = new Databases(client);
   const DB = process.env.APPWRITE_DATABASE_ID;
   const COLLECTION = process.env.META_LEADS_COLLECTION_ID;
+  const REQUESTS = process.env.REQUESTS_COLLECTION_ID;
 
   try {
+    // If a meta lead already exists for this row, just refresh it — the request
+    // was created on the first sync, so don't create a duplicate request.
     const { documents } = await databases.listDocuments(DB, COLLECTION, [
       Query.equal("contactId", rowId),
       Query.limit(1),
@@ -92,9 +95,22 @@ export default async ({ req, res, log, error }) => {
       log(`Updated meta lead ${updated.$id} for row ${rowId}`);
       return res.json({ success: true, action: "updated", id: updated.$id });
     }
+
+    // First time we see this row → create a bare Request, then the meta lead
+    // linked to it (requestDetails relationship = the request's $id/requestId).
+    // Salespeople complete + assign the request later from the Requests page.
+    let requestId = "";
+    if (REQUESTS) {
+      const request = await createBareRequest(databases, DB, REQUESTS, { name, mobileNumber, email, branch, formData: doc.formData }, log);
+      requestId = request.$id;
+      doc.requestDetails = requestId;
+    } else {
+      error("REQUESTS_COLLECTION_ID not set — creating meta lead without a linked request.");
+    }
+
     const created = await databases.createDocument(DB, COLLECTION, ID.unique(), doc);
-    log(`Created meta lead ${created.$id} for row ${rowId}`);
-    return res.json({ success: true, action: "created", id: created.$id, name, mobileNumber });
+    log(`Created meta lead ${created.$id}${requestId ? ` linked to request ${requestId}` : ""} for row ${rowId}`);
+    return res.json({ success: true, action: "created", id: created.$id, requestId, name, mobileNumber });
   } catch (e) {
     error(`Appwrite write failed: ${e.message}`);
     return res.json({ success: false, error: `Appwrite write failed: ${e.message}` }, 500);
@@ -102,6 +118,67 @@ export default async ({ req, res, log, error }) => {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+// Mint the next requestId exactly like the web app's generateId(): TODAY's date
+// (DDMMYYYY) + the global running number from the latest request's id, +1.
+// The web app stores each request with its requestId AS the document $id, so
+// the latest request's $id looks like "TO-20092026-000842".
+function generateId(lastQueryId) {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  const formattedDate = `${day}${month}${year}`;
+  const lastQueryNumber = String(lastQueryId || "").split("-")[2];
+  const n = Number(lastQueryNumber);
+  const incrementNumber = Number.isFinite(n) ? n + 1 : 1;
+  const incrementedValue = String(incrementNumber).padStart(6, "0");
+  return `TO-${formattedDate}-${incrementedValue}`;
+}
+
+// Create a minimal ("bare") Request from a Meta lead. Only identity + form data
+// is known; country, travel dates, pax and assignee are left blank for sales to
+// fill via the Requests page Update popup. The doc id IS the requestId (matching
+// the web app's addRequest), and we retry on the rare id collision.
+async function createBareRequest(databases, DB, REQUESTS, lead, log) {
+  const buildPayload = (requestId) => ({
+    status: "New",
+    requestType: "survey",
+    name: lead.name,
+    phoneNumber: lead.mobileNumber,
+    userId: "META", // Request From marker
+    branch: lead.branch,
+    email: lead.email,
+    countries: [],
+    requestDate: new Date().toISOString(),
+    requestId,
+    isItineraryConfirmed: false,
+    isCorporateBooking: false,
+    surveyDetails: JSON.stringify({ cities: {}, country: {}, experiences: {} }),
+    travellerMetaData: JSON.stringify({ departureCity: "", adults: 0, childrens: 0 }),
+    metaLeadFormData: lead.formData,
+  });
+
+  let lastErr;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { documents } = await databases.listDocuments(DB, REQUESTS, [
+      Query.limit(1),
+      Query.orderDesc("$createdAt"),
+    ]);
+    const requestId = generateId(documents[0]?.$id);
+    try {
+      const created = await databases.createDocument(DB, REQUESTS, requestId, buildPayload(requestId));
+      log(`Created request ${requestId} from meta lead`);
+      return created;
+    } catch (e) {
+      lastErr = e;
+      const dup = String(e.code) === "409" || /already exists|document_already_exists/i.test(e.message || "");
+      if (!dup) throw e;
+      log(`requestId ${requestId} collided, retrying (${attempt + 1})`);
+    }
+  }
+  throw new Error(`Could not allocate a unique requestId: ${lastErr && lastErr.message}`);
+}
 
 // Case/space/punctuation-insensitive lookup over the row's header keys.
 function pick(obj, candidates) {

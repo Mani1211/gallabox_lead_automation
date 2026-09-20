@@ -44,8 +44,9 @@ settings from `gallabox_leads`.
 - Appwrite → Functions → **Create function**, Node 18, **root directory `meta-sheet`**,
   entrypoint `src/main.js`, build `npm install`, Execute access **Any**.
 - Variables: `META_WEBHOOK_SECRET` (make one up), `APPWRITE_DATABASE_ID`,
-  `META_LEADS_COLLECTION_ID`, and `APPWRITE_API_KEY` (or grant the injected key
-  `databases.write`).
+  `META_LEADS_COLLECTION_ID`, `REQUESTS_COLLECTION_ID` (so each lead also
+  auto-creates a linked Request), and `APPWRITE_API_KEY` (or grant the injected
+  key `databases.write`).
 - Enable a **Domain** — that URL goes into the Apps Script.
 
 ## 3. Wire the Google Sheet (`apps-script.gs`)
