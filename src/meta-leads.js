@@ -101,9 +101,15 @@ export default async ({ req, res, log, error }) => {
     // Salespeople complete + assign the request later from the Requests page.
     let requestId = "";
     if (REQUESTS) {
-      const request = await createBareRequest(databases, DB, REQUESTS, { name, mobileNumber, email, branch, formData: doc.formData }, log);
-      requestId = request.$id;
-      doc.requestDetails = requestId;
+      try {
+        const request = await createBareRequest(databases, DB, REQUESTS, { name, mobileNumber, email, branch, formData: doc.formData }, log);
+        requestId = request.$id;
+        doc.requestDetails = requestId;
+      } catch (e) {
+        // A request-creation failure must NOT block the meta lead — create it
+        // unlinked so the lead is never lost; it can be converted manually.
+        error(`Request auto-create failed (creating meta lead unlinked): ${e.message}`);
+      }
     } else {
       error("REQUESTS_COLLECTION_ID not set — creating meta lead without a linked request.");
     }
