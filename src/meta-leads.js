@@ -147,22 +147,30 @@ function generateId(lastQueryId) {
 // fill via the Requests page Update popup. The doc id IS the requestId (matching
 // the web app's addRequest), and we retry on the rare id collision.
 async function createBareRequest(databases, DB, REQUESTS, lead, log) {
-  const buildPayload = (requestId) => ({
-    status: "New",
-    requestType: "survey",
-    name: lead.name,
-    phoneNumber: lead.mobileNumber,
-    userId: "META", // Request From marker
-    email: lead.email,
-    countries: [],
-    requestDate: new Date().toISOString(),
-    requestId,
-    isItineraryConfirmed: false,
-    isCorporateBooking: false,
-    surveyDetails: JSON.stringify({ cities: {}, country: {}, experiences: {} }),
-    travellerMetaData: JSON.stringify({ departureCity: "", adults: 0, childrens: 0 }),
-    metaLeadFormData: lead.formData,
-  });
+  const buildPayload = (requestId) => {
+    const now = new Date().toISOString();
+    return {
+      status: "New",
+      requestType: "survey",
+      name: lead.name,
+      phoneNumber: lead.mobileNumber,
+      userId: "META", // Request From marker
+      email: lead.email,
+      countries: [],
+      requestDate: now,
+      requestId,
+      isItineraryConfirmed: false,
+      isCorporateBooking: false,
+      surveyDetails: JSON.stringify({ cities: {}, country: {}, experiences: {} }),
+      // Required fields — seeded with placeholders the salesperson overwrites in
+      // the Requests page Update popup (its validation forces real values).
+      travellersType: "Couples",
+      onwardDate: now,
+      returnDate: now,
+      travellerMetaData: JSON.stringify({ departureCity: "", adults: 0, childrens: 0 }),
+      metaLeadFormData: lead.formData,
+    };
+  };
 
   let lastErr;
   for (let attempt = 0; attempt < 5; attempt++) {
