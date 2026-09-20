@@ -131,10 +131,28 @@ export default async ({ req, res, log, error }) => {
   }
 
   // ── 6c. No record yet AND mobile number available → CREATE ────────────────
+  //        First auto-create a linked Request (bare — sales complete + assign it
+  //        from the Requests page Update popup), then the gallabox lead linked to
+  //        it. A request failure must NOT block the lead.
+  const REQUESTS = process.env.REQUESTS_COLLECTION_ID;
+  if (REQUESTS) {
+    try {
+      const request = await createBareRequest(
+        databases,
+        DB,
+        REQUESTS,
+        { name, mobileNumber, email, chatSummary: doc.chatSummary },
+        log
+      );
+      doc.requestDetails = request.$id;
+    } catch (e) {
+      error(`Request auto-create failed (creating gallabox lead unlinked): ${e.message}`);
+    }
+  }
   try {
     const created = await databases.createDocument(DB, COLLECTION, ID.unique(), doc);
-    log(`Created gallabox lead ${created.$id} for contact ${extracted.contactId}`);
-    return res.json({ success: true, action: "created", id: created.$id, name, mobileNumber });
+    log(`Created gallabox lead ${created.$id}${doc.requestDetails ? ` linked to request ${doc.requestDetails}` : ""} for contact ${extracted.contactId}`);
+    return res.json({ success: true, action: "created", id: created.$id, requestId: doc.requestDetails || "", name, mobileNumber });
   } catch (e) {
     error(`Failed to create gallabox lead document: ${e.message}`);
     return res.json({ success: false, error: `Appwrite createDocument failed: ${e.message}` }, 500);
@@ -142,6 +160,72 @@ export default async ({ req, res, log, error }) => {
 };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+// Mint the next requestId exactly like the web app's generateId(): TODAY's date
+// (DDMMYYYY) + the running number from the latest request's id, +1. The web app
+// stores each request with its requestId AS the document $id (e.g.
+// "TO-20092026-000842").
+function generateId(lastQueryId) {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  const formattedDate = `${day}${month}${year}`;
+  const lastQueryNumber = String(lastQueryId || "").split("-")[2];
+  const n = Number(lastQueryNumber);
+  const incrementNumber = Number.isFinite(n) ? n + 1 : 1;
+  const incrementedValue = String(incrementNumber).padStart(6, "0");
+  return `TO-${formattedDate}-${incrementedValue}`;
+}
+
+// Create a minimal ("bare") Request from a Gallabox lead. Only identity + the
+// chat summary is known; country, dates, pax and assignee are left as
+// placeholders for sales to complete via the Requests page Update popup. The doc
+// id IS the requestId (matching the web app's addRequest), retried on collision.
+async function createBareRequest(databases, DB, REQUESTS, lead, log) {
+  const buildPayload = (requestId) => {
+    const now = new Date().toISOString();
+    return {
+      status: "New",
+      requestType: "survey",
+      name: lead.name,
+      phoneNumber: lead.mobileNumber,
+      userId: "Gallabox", // Request From marker
+      email: lead.email,
+      countries: [],
+      requestDate: now,
+      requestId,
+      isItineraryConfirmed: false,
+      isCorporateBooking: false,
+      surveyDetails: JSON.stringify({ cities: {}, country: {}, experiences: {} }),
+      travellersType: "Couples",
+      onwardDate: now,
+      returnDate: now,
+      travellerMetaData: JSON.stringify({ departureCity: "", adults: 0, childrens: 0 }),
+      gallaboxLeadSummary: lead.chatSummary || "",
+    };
+  };
+
+  let lastErr;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { documents } = await databases.listDocuments(DB, REQUESTS, [
+      Query.limit(1),
+      Query.orderDesc("$createdAt"),
+    ]);
+    const requestId = generateId(documents[0]?.$id);
+    try {
+      const created = await databases.createDocument(DB, REQUESTS, requestId, buildPayload(requestId));
+      log(`Created request ${requestId} from gallabox lead`);
+      return created;
+    } catch (e) {
+      lastErr = e;
+      const dup = String(e.code) === "409" || /already exists|document_already_exists/i.test(e.message || "");
+      if (!dup) throw e;
+      log(`requestId ${requestId} collided, retrying (${attempt + 1})`);
+    }
+  }
+  throw new Error(`Could not allocate a unique requestId: ${lastErr && lastErr.message}`);
+}
 
 /**
  * Extract the fields we care about from the Gallabox bot webhook.
