@@ -168,6 +168,9 @@ async function createBareRequest(databases, DB, REQUESTS, lead, log) {
       onwardDate: now,
       returnDate: now,
       travellerMetaData: JSON.stringify({ departureCity: "", adults: 0, childrens: 0 }),
+      // Which Meta branch/sheet this lead came from (Chennai / Bangalore / …),
+      // so the request can be identified by source branch.
+      metaLeadBranch: lead.branch || "",
       metaLeadFormData: lead.formData,
     };
   };
